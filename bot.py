@@ -2,26 +2,34 @@
 
 '''
 TODO:
-spotify support
+queueing
+playlist
 effects
 '''
 
-from __future__ import unicode_literals
-import discord
-from discord.ext import commands
-import youtube_dl
 import os
-from dotenv import load_dotenv
+import dotenv
+import discord
+import discord.ext.commands
+import spotipy
+import youtube_dl
 
-client = commands.Bot(command_prefix="!")
+dotenv.load_dotenv()
+token = os.getenv('DISCORD_TOKEN')
+client = discord.ext.commands.Bot(command_prefix="!")
+sp = spotipy.Spotify(client_credentials_manager=spotipy.oauth2.SpotifyClientCredentials())
 
 @client.command()
-async def play(ctx, url : str):
+async def play(ctx, url: str):
     voiceChannel = discord.utils.get(ctx.guild.voice_channels, name='General')
     voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
     if voice == None:
         await voiceChannel.connect()
         voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
+
+    if 'spotify' in url:
+        track_info = sp.track(url)
+        url = f'ytsearch:{track_info["artists"][0]["name"]} {track_info["name"]}'
 
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -34,8 +42,17 @@ async def play(ctx, url : str):
     }
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        # print(info['url'])
-        voice.play(discord.FFmpegPCMAudio(info['url']))
+        if 'url' not in info:
+            print('searched url')
+            audio_url = info['entries'][0]['url']
+        else:
+            print('regular url')
+            audio_url = info['url']
+        print(f'playing {audio_url}')
+        voice.play(discord.FFmpegPCMAudio(audio_url))
+
+async def parse_spotify_url(url: str):
+    pass
 
 
 @client.command()
@@ -70,6 +87,4 @@ async def stop(ctx):
     voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
     voice.stop()
 
-load_dotenv()
-token = os.getenv('DISCORD_TOKEN')
 client.run(token)
